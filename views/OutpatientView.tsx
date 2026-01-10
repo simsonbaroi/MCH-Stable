@@ -62,6 +62,7 @@ const OutpatientView: React.FC = () => {
     setSelectedItem(null);
     setExpandedXrayId(null);
     setSelectedXrayViews([]);
+    setSearchQuery('');
   };
 
   const goToCategory = (index: number) => {
@@ -71,6 +72,9 @@ const OutpatientView: React.FC = () => {
   };
 
   const handleItemClick = (item: InventoryItem) => {
+    // Clear search on any item click to allow fresh search as requested
+    setSearchQuery('');
+
     if (isMedicineItem(item)) {
       setSelectedItem(item);
     } else if (isXrayItem(item)) {
@@ -121,16 +125,30 @@ const OutpatientView: React.FC = () => {
     });
   };
 
+  const getViewCount = (view: string) => {
+    if (view === 'AP & LAT') return 2;
+    if (view === 'AP, LAT & OBLIQUE') return 3;
+    return 1;
+  };
+
   const handleXrayCommit = (item: InventoryItem) => {
     if (selectedXrayViews.length === 0) return;
     
-    selectedXrayViews.forEach(view => {
-      billing.addToBill({
-        ...item,
-        name: `${item.name} (${view})`,
-        qty: 1,
-        subtotal: item.price
-      });
+    // Calculate total views based on selections
+    let totalViews = 0;
+    selectedXrayViews.forEach(v => totalViews += getViewCount(v));
+    
+    const combinedViews = selectedXrayViews.join('/');
+    const totalPrice = item.price * totalViews;
+
+    // Add consolidated entry to bill
+    billing.addToBill({
+      ...item,
+      // Create unique entry ID to allow same item to be added again with different views if necessary
+      id: Date.now() + Math.random(), 
+      name: `${item.name} (${combinedViews})`,
+      qty: 1,
+      subtotal: totalPrice
     });
 
     if (offCharge) {
@@ -145,9 +163,11 @@ const OutpatientView: React.FC = () => {
       });
     }
     
-    ui.notify(`${selectedXrayViews.length} views added for ${item.name}`);
+    ui.notify(`${item.name} (${combinedViews}) added to statement`);
     setExpandedXrayId(null);
     setSelectedXrayViews([]);
+    // Clear search after committing X-ray views
+    setSearchQuery('');
   };
 
   const currentItems = useMemo(() => {
